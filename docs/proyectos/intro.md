@@ -22,6 +22,7 @@ Cada proyecto incluye:
 | 🤖 App con IA | ⭐⭐⭐ Alta | 4-5 horas | Next.js, Groq, Neon, Vercel | LLM, streaming, embeddings |
 | ⚙️ Pipeline CI/CD | ⭐⭐ Media | 2-3 horas | GitHub Actions, Vercel, Vitest | Testing, automation, deploy |
 | 💳 SaaS Básico | ⭐⭐⭐⭐ Avanzado | 6-8 horas | Next.js, Supabase, Stripe | Auth, payments, subscriptions |
+| 📄 Sitio de Docs con Deploy Automatizado | ⭐ Fácil | 30-60 min | GitHub Pages, Cloudflare, Claude Code | Deploy estático, DNS, automatización |
 
 ## Requisitos previos
 
@@ -53,6 +54,7 @@ Proyecto 1 (Chat)
       → Proyecto 3 (IA) suma embeddings y RAG sobre una base de datos
         → Proyecto 4 (CI/CD) automatiza testing y deploy de cualquier proyecto
           → Proyecto 5 (SaaS) combina todo con pagos reales
+          → Proyecto 6 (Docs) deploy estático con automatización reutilizable
 ```
 
 :::tip
