@@ -68,23 +68,9 @@ Copiar [deploy-templates/skills/check-deployment/SKILL.md](deploy-templates/skil
 
 ### Paso 3 — Agregar el hook en `~/.claude/settings.json`
 
-Añadir esta sección al JSON existente:
+Copiar [deploy-templates/settings.json](deploy-templates/settings.json) y **mergear** la sección `"hooks"` en tu `~/.claude/settings.json` existente.
 
-```json
-"hooks": {
-  "PostToolUse": [
-    {
-      "matcher": "Bash",
-      "hooks": [
-        {
-          "type": "command",
-          "command": "bash -c 'CMD=$(echo \"$CLAUDE_TOOL_INPUT\" | python3 -c \"import sys,json; print(json.load(sys.stdin).get(\\\"command\\\",\\\"\\\"))\" 2>/dev/null); if echo \"$CMD\" | grep -qE \"git push\"; then REMOTE=$(git remote get-url origin 2>/dev/null); if echo \"$REMOTE\" | grep -q \"github.com\"; then REPO=$(echo \"$REMOTE\" | sed \"s|.*github.com/||\" | sed \"s|\\.git$||\"); sleep 5; RESULT=$(gh api repos/$REPO/actions/runs --jq \".workflow_runs[0] | \\\"[deploy-hook] Workflow: \\(.name) | \\(.status) / \\(.conclusion // \\\"running...\\\") | \\(.html_url)\\\"\" 2>/dev/null); echo \"${RESULT:-[deploy-hook] No se pudo obtener el estado del workflow}\"; fi; fi'"
-        }
-      ]
-    }
-  ]
-}
-```
+Si tu `settings.json` ya tiene contenido, solo añade la clave `"hooks"` al objeto raíz — no reemplaces el archivo completo.
 
 ---
 
@@ -156,6 +142,7 @@ deploy-templates/
 ├── CLAUDE.md                          ← template del CLAUDE.md del proyecto
 ├── CNAME                              ← template del CNAME
 ├── deploy.yml                         ← workflow de GitHub Actions (copiar tal cual)
+├── settings.json                      ← hook post-push (mergear en ~/.claude/settings.json)
 ├── agents/
 │   └── static-site-deployer.md        ← agente global (copiar a ~/.claude/agents/)
 └── skills/

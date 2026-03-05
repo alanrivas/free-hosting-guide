@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'CMD=$(echo \"$CLAUDE_TOOL_INPUT\" | python3 -c \"import sys,json; print(json.load(sys.stdin).get(\\\"command\\\",\\\"\\\"))\" 2>/dev/null); if echo \"$CMD\" | grep -qE \"git push\"; then REMOTE=$(git remote get-url origin 2>/dev/null); if echo \"$REMOTE\" | grep -q \"github.com\"; then REPO=$(echo \"$REMOTE\" | sed \"s|.*github.com/||\" | sed \"s|\\.git$||\"); sleep 5; RESULT=$(gh api repos/$REPO/actions/runs --jq \".workflow_runs[0] | \\\"[deploy-hook] Workflow: \\(.name) | \\(.status) / \\(.conclusion // \\\"running...\\\") | \\(.html_url)\\\"\" 2>/dev/null); echo \"${RESULT:-[deploy-hook] No se pudo obtener el estado del workflow}\"; fi; fi'"
+          }
+        ]
+      }
+    ]
+  }
+}
