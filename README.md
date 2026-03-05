@@ -6,131 +6,164 @@ Sitio Docusaurus desplegado en GitHub Pages con dominio personalizado via Cloudf
 
 ---
 
-## Deploy automatizado con Claude Code
+## Sistema de deploy automatizado con Claude Code
 
-Este repo usa un sistema de automatización con Claude Code para hacer deploys con un solo comando. La idea es reutilizable en cualquier proyecto Docusaurus similar.
+Este repo incluye un sistema reutilizable para hacer deploys a GitHub Pages con dominio personalizado en Cloudflare, usando Claude Code como orquestador.
 
-### Cómo funciona
+Una vez instalado, el flujo completo se reduce a:
 
 ```
-/deploy-gh-pages   →  setup completo (primera vez)
+/deploy-gh-pages   →  setup completo en un proyecto nuevo (1 solo comando)
 /check-deployment  →  verificar estado en cualquier momento
-git push           →  deploy automático + hook que reporta el estado
+git push           →  deploy automático + reporte de estado en la conversación
 ```
 
 ---
 
-## Arquitectura del sistema
+## Estructura de archivos del sistema
 
-### 1. Agent: `static-site-deployer`
-**Archivo:** `~/.claude/agents/static-site-deployer.md`
-
-El "cerebro" del sistema. Agente especializado que conoce todos los pasos del deploy:
-- Configurar `docusaurus.config.ts`
-- Crear `static/CNAME`
-- Crear el workflow de GitHub Actions
-- Llamar a la GitHub Pages API via `gh`
-- Verificar DNS y HTTPS
-
-Se invoca automáticamente desde los skills, no directamente por el usuario.
-
----
-
-### 2. Skill: `/deploy-gh-pages`
-**Archivo:** `~/.claude/skills/deploy-gh-pages.md`
-
-Setup completo de un proyecto nuevo. Pide `org`, `repo` y `domain`, luego ejecuta el pipeline entero de forma autónoma.
-
-**Uso:**
 ```
-/deploy-gh-pages org=alanrivas repo=mi-proyecto domain=mi-proyecto.alanrivas.me
+~/.claude/                              ← carpeta global de Claude Code
+├── agents/
+│   └── static-site-deployer.md        ← agente especializado (cerebro del sistema)
+├── skills/
+│   ├── deploy-gh-pages/
+│   │   └── SKILL.md                   ← comando /deploy-gh-pages
+│   └── check-deployment/
+│       └── SKILL.md                   ← comando /check-deployment
+└── settings.json                      ← hook post-push
+
+[tu-proyecto]/
+├── CLAUDE.md                          ← contexto del proyecto para Claude
+├── static/CNAME                       ← dominio personalizado
+└── .github/workflows/deploy.yml       ← workflow de GitHub Actions
 ```
 
 ---
 
-### 3. Skill: `/check-deployment`
-**Archivo:** `~/.claude/skills/check-deployment.md`
+## Cómo instalar en una máquina nueva
 
-Verificación completa del estado de un deploy existente. Comprueba:
-- GitHub Pages API (CNAME, HTTPS enforcement)
-- Último workflow run (status + conclusion)
-- DNS resolution (alias a `{org}.github.io`)
-- Respuesta HTTPS en vivo (curl)
+Todos los archivos globales van en `~/.claude/`. En Windows: `C:\Users\TU-USUARIO\.claude\`.
 
-**Uso:**
+### Paso 1 — Copiar el agente
+
+Copiar [deploy-templates/agents/static-site-deployer.md](deploy-templates/agents/static-site-deployer.md) a:
+```
+~/.claude/agents/static-site-deployer.md
+```
+
+### Paso 2 — Copiar los skills
+
+Copiar [deploy-templates/skills/deploy-gh-pages/SKILL.md](deploy-templates/skills/deploy-gh-pages/SKILL.md) a:
+```
+~/.claude/skills/deploy-gh-pages/SKILL.md
+```
+
+Copiar [deploy-templates/skills/check-deployment/SKILL.md](deploy-templates/skills/check-deployment/SKILL.md) a:
+```
+~/.claude/skills/check-deployment/SKILL.md
+```
+
+> **Importante:** Los skills deben estar en una **carpeta** con ese nombre y el archivo debe llamarse exactamente `SKILL.md`.
+
+### Paso 3 — Agregar el hook en `~/.claude/settings.json`
+
+Añadir esta sección al JSON existente:
+
+```json
+"hooks": {
+  "PostToolUse": [
+    {
+      "matcher": "Bash",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "bash -c 'CMD=$(echo \"$CLAUDE_TOOL_INPUT\" | python3 -c \"import sys,json; print(json.load(sys.stdin).get(\\\"command\\\",\\\"\\\"))\" 2>/dev/null); if echo \"$CMD\" | grep -qE \"git push\"; then REMOTE=$(git remote get-url origin 2>/dev/null); if echo \"$REMOTE\" | grep -q \"github.com\"; then REPO=$(echo \"$REMOTE\" | sed \"s|.*github.com/||\" | sed \"s|\\.git$||\"); sleep 5; RESULT=$(gh api repos/$REPO/actions/runs --jq \".workflow_runs[0] | \\\"[deploy-hook] Workflow: \\(.name) | \\(.status) / \\(.conclusion // \\\"running...\\\") | \\(.html_url)\\\"\" 2>/dev/null); echo \"${RESULT:-[deploy-hook] No se pudo obtener el estado del workflow}\"; fi; fi'"
+        }
+      ]
+    }
+  ]
+}
+```
+
+---
+
+## Cómo usar en un proyecto nuevo
+
+Una vez instalados los archivos globales, para cada proyecto nuevo:
+
+### Paso 1 — Agregar el DNS en Cloudflare (antes de todo)
+
+En tu panel de Cloudflare, para tu dominio, añadir:
+
+| Tipo | Nombre | Contenido | Proxy |
+|---|---|---|---|
+| `CNAME` | `nombre-del-proyecto` | `TU-USUARIO.github.io` | **Off** (nube gris) |
+
+> El proxy **debe estar desactivado** para que GitHub Pages emita el certificado SSL.
+
+### Paso 2 — Copiar `CLAUDE.md` al proyecto
+
+Copiar [deploy-templates/CLAUDE.md](deploy-templates/CLAUDE.md) a la raíz del proyecto y editar estos valores:
+
+```markdown
+| **GitHub org**    | `TU-USUARIO`                    |
+| **Repo**          | `NOMBRE-EXACTO-DEL-REPO`        |
+| **Custom domain** | `subdominio.tudominio.com`       |
+```
+
+### Paso 3 — Correr el skill desde Claude Code
+
+Abrir Claude Code en el proyecto y ejecutar:
+
+```
+/deploy-gh-pages
+```
+
+Claude detectará el contexto desde `CLAUDE.md` y ejecutará el pipeline completo de forma autónoma:
+- Actualiza `docusaurus.config.ts`
+- Crea `static/CNAME`
+- Crea `.github/workflows/deploy.yml`
+- Hace commit y push
+- Configura GitHub Pages via API (CNAME + HTTPS)
+- Verifica DNS y respuesta HTTPS
+
+### Paso 4 — Verificar
+
 ```
 /check-deployment
 ```
 
 ---
 
-### 4. Hook: post-push
-**Archivo:** `~/.claude/settings.json`
+## Qué cambia de proyecto a proyecto
 
-Después de cada `git push`, el hook espera 5 segundos y consulta automáticamente el estado del workflow. Claude te reporta en la conversación si el deploy fue exitoso o falló, sin que tengas que preguntar.
+| Qué | Dónde |
+|---|---|
+| Nombre del proyecto, org, dominio | `CLAUDE.md` |
+| Dominio personalizado | `static/CNAME` |
+| `url`, `organizationName`, `projectName` | `docusaurus.config.ts` |
+| Registro DNS | Cloudflare (manual) |
+
+El workflow `.github/workflows/deploy.yml` es **idéntico** en todos los proyectos.
 
 ---
 
-### 5. `CLAUDE.md` por proyecto
-**Archivo:** `CLAUDE.md` (en la raíz del proyecto)
-
-Le da contexto permanente a Claude sobre el proyecto: org, repo, dominio, stack. Así cualquier skill o agente sabe con qué proyecto está trabajando sin que tengas que repetírselo.
-
----
-
-## Usar en un proyecto nuevo
-
-### Paso 1 — Copiar los archivos de `deploy-templates/`
+## Archivos de referencia en este repo
 
 ```
 deploy-templates/
-├── CLAUDE.md       →  copiar a la raíz del proyecto, editar los valores
-├── deploy.yml      →  copiar a .github/workflows/deploy.yml
-└── CNAME           →  copiar a static/CNAME, poner tu dominio
+├── CLAUDE.md                          ← template del CLAUDE.md del proyecto
+├── CNAME                              ← template del CNAME
+├── deploy.yml                         ← workflow de GitHub Actions (copiar tal cual)
+├── agents/
+│   └── static-site-deployer.md        ← agente global (copiar a ~/.claude/agents/)
+└── skills/
+    ├── deploy-gh-pages/
+    │   └── SKILL.md                   ← skill /deploy-gh-pages (copiar a ~/.claude/skills/)
+    └── check-deployment/
+        └── SKILL.md                   ← skill /check-deployment (copiar a ~/.claude/skills/)
 ```
-
-Los archivos globales (`~/.claude/agents/` y `~/.claude/skills/`) ya están instalados y se comparten entre todos los proyectos.
-
-### Paso 2 — Editar `CLAUDE.md`
-
-Cambiar estos valores por los del nuevo proyecto:
-
-```markdown
-| **GitHub org** | `TU-ORG-O-USUARIO` |    ← tu usuario de GitHub
-| **Repo**       | `NOMBRE-DEL-REPO`  |    ← nombre exacto del repo
-| **Custom domain** | `SUBDOMINIO.tudominio.com` |  ← tu dominio
-```
-
-### Paso 3 — Configurar el DNS en Cloudflare
-
-Antes de correr el skill, añadir este registro en Cloudflare:
-
-| Tipo | Nombre | Contenido | Proxy |
-|---|---|---|---|
-| `CNAME` | `SUBDOMINIO` | `TU-USUARIO.github.io` | **Off** (nube gris) |
-
-> El proxy de Cloudflare debe estar **desactivado** para que GitHub Pages pueda emitir el certificado SSL. Una vez activo el SSL, se puede volver a activar si se desea.
-
-### Paso 4 — Correr el skill
-
-```
-/deploy-gh-pages org=TU-ORG repo=NOMBRE-DEL-REPO domain=SUBDOMINIO.tudominio.com
-```
-
-El agente hace todo el resto de forma autónoma.
-
----
-
-## Qué cambia de proyecto a proyecto
-
-| Archivo | Qué editar |
-|---|---|
-| `CLAUDE.md` | org, repo, domain |
-| `static/CNAME` | el dominio exacto |
-| `docusaurus.config.ts` | `url`, `organizationName`, `projectName` |
-| DNS en Cloudflare | nombre del subdominio y target |
-
-El workflow `.github/workflows/deploy.yml` es **idéntico** en todos los proyectos, no necesita cambios.
 
 ---
 
