@@ -105,6 +105,7 @@ const sidebars: SidebarsConfig = {
         'proyectos/proyecto-3-ia-integrada',
         'proyectos/proyecto-4-cicd-pipeline',
         'proyectos/proyecto-5-saas-basico',
+        'proyectos/proyecto-6-docusaurus-ghpages',
       ],
     },
   ],
